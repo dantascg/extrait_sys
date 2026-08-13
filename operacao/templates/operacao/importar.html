@@ -1,0 +1,314 @@
+{% extends 'operacao/base.html' %}
+
+{% block title %}Extrait Club - Gestão de Perfumes{% endblock %}
+{% block page_title %}Gestão de Perfumes{% endblock %}
+{% block page_subtitle %}Importe, acompanhe e gerencie o estoque de decants{% endblock %}
+
+{% block content %}
+
+{% if resultado %}
+<div class="error-box">{{ resultado }}</div>
+{% endif %}
+
+{% if dados_resumo %}
+
+{# ================================================================== #}
+{# ESTADO 2 — RESULTADO DA IA #}
+{# ================================================================== #}
+<form method="POST" action="{% url 'operacao:confirmar_importacao' %}" id="form-faturamento">
+    {% csrf_token %}
+
+    <div class="summary-card">
+
+        <!-- Lado esquerdo: info do perfume + ações -->
+        <div class="summary-left">
+
+            {% if tem_conflito %}
+            <div class="status-badge badge-warning" id="status-global">Revisão necessária</div>
+            {% else %}
+            <div class="status-badge" id="status-global">Pronto para faturar</div>
+            {% endif %}
+
+            <h2>{{ dados_resumo.perfume }}</h2>
+
+            <div class="info-row">
+                <span class="info-label">Marca</span>
+                <span class="info-value">{{ dados_resumo.marca }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Valor / ml</span>
+                <span class="info-value">R$ {{ dados_resumo.preco_ml|floatformat:"2" }}</span>
+            </div>
+
+            <!-- Toast de erro (substitui o alert nativo) -->
+            <div class="toast-erro" id="toast-erro" style="display: none;">
+                Resolva todos os conflitos antes de confirmar.
+            </div>
+
+            <div class="action-buttons">
+                <button type="submit" class="btn-action btn-primario" style="width: 100%;">
+                    Confirmar e faturar lances
+                </button>
+                <a href="{% url 'operacao:importar_leilao' %}" class="btn-action btn-secundario">Cancelar importação</a>
+                <a href="{% url 'operacao:importar_leilao' %}" class="btn-action btn-secundario" style="border-color: #d6d3d1; color: #57534e;">+ Importar outro perfume</a>
+            </div>
+
+        </div>
+
+        <!-- Lado direito: lista de compradores -->
+        <div class="summary-right">
+            <div class="lista-header">Compradores ({{ dados_resumo.compras|length }})</div>
+
+            <div class="lista-compradores">
+                {% for lance in dados_resumo.compras %}
+
+                {% if lance.status == 'conflito' %}
+                <div class="lance-row is-conflict unresolved" onclick="toggleConflict(this)">
+                    {% else %}
+                    <div class="lance-row">
+                        {% endif %}
+
+                        <div class="lance-header">
+                            <div class="lance-esq">
+                                <span class="lance-nome">{{ lance.nome }}</span>
+
+                                <span class="lance-tipo {% if lance.tipo == 'APC' %}apc{% endif %}">
+                                    {{ lance.tipo }}
+                                </span>
+
+                                {% if lance.status == 'novo' %}
+                                <span class="badge-status badge-novo">Novo</span>
+                                {% elif lance.status == 'conflito' %}
+                                <span class="badge-status badge-erro">Conflito</span>
+                                {% endif %}
+                            </div>
+                            <span class="lance-ml">{{ lance.ml }}ml</span>
+                        </div>
+
+                        {% if lance.status == 'conflito' %}
+                        <div class="conflito-expand" onclick="event.stopPropagation();">
+                            <select name="resolucao_{{ forloop.counter0 }}" class="select-resolucao" required>
+                                <option value="" disabled selected>Selecione o cliente...</option>
+                                <option value="novo">Criar novo: "{{ lance.nome }}"</option>
+                                {% for sugestao in lance.sugestoes %}
+                                <option value="{{ sugestao.id }}">Vincular a: {{ sugestao.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn-resolver" onclick="resolverConflito(this)">
+                                Confirmar escolha
+                            </button>
+                        </div>
+                        {% endif %}
+
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+</form>
+
+{% else %}
+
+{# ================================================================== #}
+{# ESTADO 1 — DASHBOARD #}
+{# ================================================================== #}
+<div class="grid-2col">
+
+    <!-- Importar -->
+    <div class="card">
+        <h2 class="section-title">Importar perfume</h2>
+        <p class="section-desc">Cole abaixo a mensagem com os dados do leilão ou split.</p>
+
+        <form method="POST" id="form-importacao">
+            {% csrf_token %}
+            <textarea name="texto_leilao" id="texto_leilao" class="textarea-custom"
+                placeholder="Cole aqui a mensagem do WhatsApp...&#10;&#10;Exemplo:&#10;&#10;Crème de Cuir - BDK Parfums&#10;5ml · R$17/ml&#10;&#10;João — 5ml&#10;Maria — 10ml"
+                required></textarea>
+
+            <button type="submit" class="btn-processar" id="btn-submit">
+                <span class="spinner" id="loading-spinner"></span>
+                <span id="btn-text">Analisar com IA</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Perfumes recentes -->
+    <div class="card" style="display: flex; flex-direction: column;">
+        <h2 class="section-title">Importações recentes</h2>
+        <p class="section-desc">Últimas aberturas processadas.</p>
+        <div class="recent-imports" style="flex: 1; overflow-y: auto;">
+            {% for f in frascos_recentes %}
+            <div class="recent-item">
+                <div>
+                    <p class="perfume-name-sm">{{ f.nome_perfume }}</p>
+                    <p class="perfume-brand-sm">{{ f.marca }}</p>
+                </div>
+                <div style="text-align: right;">
+                    <span class="badge-ui badge-updated">Adicionado</span>
+                    <p style="font-size: 10px; color: var(--faint); margin: 4px 0 0 0;">{{ f.data_abertura|date:"d M Y" }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div style="padding: 24px; text-align: center; color: var(--muted); font-size: 12px;">Nenhuma importação recente.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+
+<!-- Métricas -->
+<div class="divider-row">
+    <span>Visão geral</span>
+    <div class="line"></div>
+</div>
+
+<div class="grid-5col" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
+    <div class="stat-card">
+        <p class="stat-value">{{ stats_dashboard.total_frascos }}</p>
+        <p class="stat-label">Perfumes cadastrados</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-value">{{ stats_dashboard.decants_abertos }}</p>
+        <p class="stat-label">Decants abertos</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-value">{{ stats_dashboard.importados_recentemente }}</p>
+        <p class="stat-label">Importados 30d</p>
+    </div>
+    <a href="{% url 'operacao:estoque_baixo' %}" style="text-decoration: none; color: inherit;">
+        <div class="stat-card" style="cursor: pointer; border-color: #fca5a5;">
+            <p class="stat-value" style="color: #dc2626;">{{ stats_dashboard.estoque_baixo }}</p>
+            <p class="stat-label">Estoque baixo</p>
+        </div>
+    </a>
+    <a href="{% url 'operacao:lista_clientes' %}" style="text-decoration: none; color: inherit;">
+        <div class="stat-card" style="cursor: pointer;">
+            <p class="stat-value">{{ stats_dashboard.clientes_pendentes }}</p>
+            <p class="stat-label">Clientes pendentes</p>
+        </div>
+    </a>
+</div>
+
+<!-- Decants abertos -->
+<div class="divider-row" style="margin-top: 40px;">
+    <span>Decants abertos</span>
+    <div class="line"></div>
+    <span class="subtext">Estoque atual com volume restante</span>
+</div>
+
+<div class="grid-5col">
+    {% for f in frascos_abertos %}
+    <div class="decant-card">
+        <div class="decant-header">
+            <div style="min-width: 0;">
+                <p class="decant-title">{{ f.nome_perfume }}</p>
+                <p class="perfume-brand-sm">{{ f.marca }}</p>
+            </div>
+            <span class="badge-ui {% if f.ml_disponiveis <= 10 %}badge-updated{% else %}badge-imported{% endif %}">
+                {% if f.ml_disponiveis <= 10 %}Crítico{% else %}Aberto{% endif %}
+            </span>
+        </div>
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 10px; color: var(--muted);">Volume restante</span>
+                <span style="font-size: 14px; font-family: var(--font-serif); font-weight: 500; {% if f.ml_disponiveis <= 10 %}color: var(--gold);{% endif %}">
+                    {% if f.ml_disponiveis is not None %}{{ f.ml_disponiveis }} ml{% else %}N/A{% endif %}
+                </span>
+            </div>
+            {% if f.ml_total and f.ml_disponiveis %}
+            <div class="progress-container">
+                <div class="progress-fill {% if f.ml_disponiveis <= 10 %}progress-yellow{% else %}progress-green{% endif %}" style="width: {% widthratio f.ml_disponiveis f.ml_total 100 %}%;"></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+    <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: var(--muted); font-size: 14px;">
+        Nenhum decant aberto no momento.
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+    // ── Spinner no submit ──────────────────────────────────────────────────
+    const formImportacao = document.getElementById('form-importacao');
+    if (formImportacao) {
+        formImportacao.addEventListener('submit', function () {
+            const btn = document.getElementById('btn-submit');
+            const spinner = document.getElementById('loading-spinner');
+            const btnText = document.getElementById('btn-text');
+            const textarea = document.getElementById('texto_leilao');
+
+            spinner.style.display = 'inline-block';
+            btnText.innerText = 'Processando...';
+            btn.disabled = true;
+            btn.style.opacity = '0.8';
+            textarea.readOnly = true;
+            textarea.style.opacity = '0.5';
+            document.body.style.cursor = 'wait';
+        });
+    }
+
+    // ── Expandir/colapsar conflito ─────────────────────────────────────────
+    function toggleConflict(row) {
+        if (row.classList.contains('unresolved')) {
+            row.classList.toggle('expanded');
+        }
+    }
+
+    // ── Resolver conflito ──────────────────────────────────────────────────
+    function resolverConflito(btn) {
+        const row = btn.closest('.lance-row');
+        const select = row.querySelector('select');
+
+        if (!select.value) {
+            // Destaca o select brevemente em vez de alert
+            select.style.borderColor = '#b91c1c';
+            setTimeout(() => select.style.borderColor = '#fcd34d', 1200);
+            return;
+        }
+
+        // Marca como resolvido visualmente
+        row.classList.remove('is-conflict', 'unresolved', 'expanded');
+        row.style.cssText = 'border-bottom: 1px dashed var(--border);';
+
+        const badge = row.querySelector('.badge-status');
+        if (badge) {
+            badge.classList.replace('badge-erro', 'badge-ok');
+            badge.textContent = 'Resolvido';
+        }
+        row.querySelector('.lance-nome').style.color = 'var(--ink)';
+
+        // Atualiza status global se não há mais pendências
+        if (document.querySelectorAll('.unresolved').length === 0) {
+            const statusGlobal = document.getElementById('status-global');
+            if (statusGlobal) {
+                statusGlobal.classList.remove('badge-warning');
+                statusGlobal.textContent = 'Pronto para faturar';
+                statusGlobal.style.background = '#ecfdf5';
+                statusGlobal.style.color = '#047857';
+            }
+        }
+    }
+
+    // ── Bloquear submit com pendências (toast inline) ──────────────────────
+    const formFaturamento = document.getElementById('form-faturamento');
+    if (formFaturamento) {
+        formFaturamento.addEventListener('submit', function (e) {
+            const pendencias = document.querySelectorAll('.unresolved').length;
+            if (pendencias > 0) {
+                e.preventDefault();
+                const toast = document.getElementById('toast-erro');
+                toast.style.display = 'block';
+                setTimeout(() => toast.style.display = 'none', 3500);
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends 'operacao/base.html' %}
+
+{% block title %}Extrait Club - {{ perfume.nome }}{% endblock %}
+{% block container_class %}container-largo{% endblock %}
+{% block header_class %}header-clientes{% endblock %}
+{% block page_title %}{{ perfume.nome }}{% endblock %}
+{% block page_subtitle %}{{ perfume.marca }}{% endblock %}
+{% block nav_button %}
+<div style="margin-top: 24px;">
+    <a href="{% url 'operacao:lista_perfumes' %}" class="btn btn-secundario" style="border-color: #d6d3d1;">
+        ← Voltar para o catálogo
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="perfume-grupo">
+    <div class="aberturas-grid">
+        {% for abertura in perfume.aberturas %}
+        <div class="abertura-card">
+            <div class="abertura-header">
+                <div>
+                    <span class="abertura-data">Abertura {{ forloop.counter }} · {{ abertura.data_abertura|date:"d M Y" }}</span>
+                    {% if abertura.ml_total %}
+                    <span class="abertura-ml-total">· {{ abertura.ml_total }}ml total</span>
+                    {% endif %}
+                </div>
+                <span class="status-badge {% if abertura.status == 'ABERTO' %}status-aberto{% else %}status-fechado{% endif %}">{{ abertura.get_status_display }}</span>
+            </div>
+            
+            <div class="abertura-disponibilidade">
+                <span class="disponibilidade-label">Disponível:</span>
+                {% if abertura.ml_total and abertura.ml_disponiveis %}
+                <div class="progress-bar-container" style="width: 120px; display: inline-block; vertical-align: middle; margin: 0 8px;">
+                    <div class="progress-bar" style="width: {% widthratio abertura.ml_disponiveis abertura.ml_total 100 %}%; background-color: {% if abertura.ml_disponiveis <= 10 %}#d93025{% else %}#1a1a1a{% endif %};"></div>
+                </div>
+                {% endif %}
+                <span class="disponibilidade-valor {% if abertura.ml_disponiveis <= 10 %}texto-vermelho{% endif %}">
+                    {% if abertura.ml_disponiveis is not None %}
+                        {{ abertura.ml_disponiveis }}ml
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+            </div>
+            
+            {% if abertura.pedido_set.all %}
+            <div class="abertura-pedidos">
+                {% for pedido in abertura.pedido_set.all %}
+                <div class="pedido-linha">
+                    <span class="pedido-cliente">{{ pedido.cliente.nome }}</span>
+                    <span class="pedido-tipo">{{ pedido.tipo_pedido }}</span>
+                    <span class="pedido-ml">{{ pedido.quantidade_ml }}ml</span>
+                    <span class="pedido-valor">R$ {{ pedido.valor_total|floatformat:2 }}</span>
+                    {% if pedido.transferencia_origem %}
+                        <span class="badge-transferencia">Transferência</span>
+                    {% endif %}
+                    <button type="button" class="btn-transferir-inline" onclick="abrirModalTransferencia({{ pedido.id }}, '{{ pedido.cliente.nome }}', {{ pedido.quantidade_ml }})" title="Transferir ML">⇄</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="abertura-pedidos-vazio" style="padding: 12px; color: #a8a29e; font-size: 14px; text-align: center;">Nenhum pedido nesta abertura.</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal de Transferência -->
+<div id="modalTransferencia" class="modal-overlay" style="display: none;">
+    <div class="modal-content card">
+        <h3 style="margin-bottom: 16px; font-family: 'Cormorant Garamond', serif; font-size: 24px;">Transferir ML</h3>
+        <p style="margin-bottom: 24px; color: #57534e; font-size: 14px;">
+            Cedente: <strong id="modalCedenteNome"></strong> (Total: <span id="modalCedenteTotal"></span>ml)
+        </p>
+        
+        <form id="formTransferencia" method="post" action="">
+            {% csrf_token %}
+            
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="destinatario_id" style="display: block; margin-bottom: 8px; font-weight: 500;">Destinatário:</label>
+                <select name="destinatario_id" id="destinatario_id" required style="width: 100%; padding: 10px; border: 1px solid #d6d3d1; border-radius: 4px; font-family: 'Inter', sans-serif;">
+                    <option value="">Selecione um cliente...</option>
+                    {% for c in clientes_lista %}
+                    <option value="{{ c.id }}">{{ c.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="quantidade_ml" style="display: block; margin-bottom: 8px; font-weight: 500;">Quantidade (ML):</label>
+                <input type="number" name="quantidade_ml" id="quantidade_ml" min="1" required style="width: 100%; padding: 10px; border: 1px solid #d6d3d1; border-radius: 4px; font-family: 'Inter', sans-serif;">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label for="observacao" style="display: block; margin-bottom: 8px; font-weight: 500;">Observação (Opcional):</label>
+                <input type="text" name="observacao" id="observacao" style="width: 100%; padding: 10px; border: 1px solid #d6d3d1; border-radius: 4px; font-family: 'Inter', sans-serif;" placeholder="Ex: Acordo no WhatsApp">
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalTransferencia()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function abrirModalTransferencia(pedidoId, clienteNome, quantidadeMl) {
+        document.getElementById('modalCedenteNome').innerText = clienteNome;
+        document.getElementById('modalCedenteTotal').innerText = quantidadeMl;
+        document.getElementById('quantidade_ml').max = quantidadeMl - 1;
+        
+        var form = document.getElementById('formTransferencia');
+        form.action = "/pedidos/" + pedidoId + "/transferir/";
+        
+        document.getElementById('modalTransferencia').style.display = 'flex';
+    }
+    
+    function fecharModalTransferencia() {
+        document.getElementById('modalTransferencia').style.display = 'none';
+        document.getElementById('formTransferencia').reset();
+    }
+</script>
+
+<style>
+    .aberturas-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+        gap: 20px;
+    }
+    .abertura-card {
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .abertura-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .abertura-data {
+        font-weight: 500;
+        color: #1a1a1a;
+    }
+    .abertura-ml-total {
+        color: #78716c;
+        font-size: 14px;
+    }
+    .abertura-disponibilidade {
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+    .disponibilidade-label {
+        color: #57534e;
+    }
+    .disponibilidade-valor {
+        font-weight: 600;
+        font-size: 15px;
+    }
+    .texto-vermelho {
+        color: #d93025;
+    }
+    .progress-bar-container {
+        height: 6px;
+        background-color: #f5f5f4;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .progress-bar {
+        height: 100%;
+        border-radius: 3px;
+    }
+    .abertura-pedidos {
+        background: #fafaf9;
+        border-radius: 6px;
+        padding: 12px;
+    }
+    .pedido-linha {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+    }
+    .pedido-linha:last-child {
+        border-bottom: none;
+    }
+    .pedido-cliente {
+        flex: 1;
+        font-weight: 500;
+        color: #1a1a1a;
+    }
+    .pedido-tipo {
+        width: 60px;
+        color: #78716c;
+        font-size: 12px;
+    }
+    .pedido-ml {
+        width: 50px;
+        font-weight: 600;
+        text-align: right;
+    }
+    .pedido-valor {
+        width: 80px;
+        text-align: right;
+        color: #57534e;
+    }
+    .badge-transferencia {
+        background: #fef08a;
+        color: #854d0e;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .btn-transferir-inline {
+        background: none;
+        border: none;
+        color: #a8a29e;
+        cursor: pointer;
+        margin-left: 8px;
+        padding: 4px;
+        border-radius: 4px;
+        font-size: 16px;
+    }
+    .btn-transferir-inline:hover {
+        background: #f5f5f4;
+        color: #1a1a1a;
+    }
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-content {
+        width: 100%;
+        max-width: 400px;
+        background: #fff;
+    }
+</style>
+{% endblock %}

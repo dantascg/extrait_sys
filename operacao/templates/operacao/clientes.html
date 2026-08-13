@@ -1,0 +1,116 @@
+{% extends 'operacao/base.html' %}
+{% load static %}
+
+{% block title %}Extrait Club - Clientes{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+{% block page_subtitle %}Gerencie perfis, histórico de compras e saldos pendentes{% endblock %}
+
+{% block content %}
+<div class="clientes-container">
+
+    <div class="divider-row">
+        <span>LISTA DE CLIENTES — {{ clientes|length }} ENCONTRADOS</span>
+        <div class="line"></div>
+    </div>
+
+    <div class="clientes-layout">
+
+        <!-- Coluna Esquerda: Busca e Lista -->
+        <div class="clientes-main">
+
+            <!-- Barra de Busca -->
+            <form method="GET" action="{% url 'operacao:lista_clientes' %}" class="search-box">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" style="color: var(--muted); flex-shrink: 0;">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" name="q" value="{{ query }}" placeholder="Buscar cliente por nome ou ID..."
+                    class="search-input" autocomplete="off">
+                {% if query %}
+                <a href="{% url 'operacao:lista_clientes' %}" class="clear-search">✕</a>
+                {% endif %}
+            </form>
+
+            <!-- Lista de Clientes -->
+            <div class="clientes-lista">
+                {% for c in clientes %}
+                <a href="{% url 'operacao:detalhe_cliente' c.id %}" class="client-card">
+
+                    <!-- Identidade -->
+                    <div class="client-info">
+                        <p class="client-name">{{ c.nome }}</p>
+                        <p class="client-meta">
+                            EC-{{ c.id|stringformat:"03d" }}
+                            {% if c.ultima_atividade %} · {{ c.ultima_atividade }}{% endif %}
+                        </p>
+                    </div>
+
+                    <!-- Saldo Pendente -->
+                    <div class="client-balance">
+                        {% if c.saldo_pendente > 0 %}
+                        <span class="balance-value">R$ {{ c.saldo_pendente|floatformat:"2" }}</span>
+                        <span class="balance-label">PENDENTE</span>
+                        {% else %}
+                        <span class="balance-empty">—</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="client-status hidden-mobile">
+                        {% if c.status == 'ACTIVE' %}
+                        <span class="badge-ui badge-imported">Ativo</span>
+                        {% elif c.status == 'PENDING' %}
+                        <span class="badge-ui badge-updated">Pendente</span>
+                        {% else %}
+                        <span class="badge-ui badge-pending">Sem pedidos</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Chevron -->
+                    <div class="client-chevron">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+
+                </a>
+                {% empty %}
+                <div class="empty-state-clients">
+                    <p class="empty-title">Nenhum cliente encontrado</p>
+                    <p class="empty-subtitle">Tente um nome diferente na busca acima.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+        </div>
+
+        <!-- Coluna Direita: Overview -->
+        <aside class="clientes-sidebar hidden-mobile">
+            <p class="overview-title">VISÃO GERAL</p>
+
+            <div class="summary-box">
+                <p class="summary-val">{{ stats.total }}</p>
+                <p class="summary-lbl">Total de clientes</p>
+            </div>
+
+            <div class="summary-box">
+                <p class="summary-val" style="color: #ea580c;">{{ stats.pendentes }}</p>
+                <p class="summary-lbl">Com saldo pendente</p>
+            </div>
+
+            <div class="summary-box">
+                <p class="summary-val" style="color: #059669;">{{ stats.ativos }}</p>
+                <p class="summary-lbl">Clientes ativos</p>
+            </div>
+
+            <div class="summary-box">
+                <p class="summary-val" style="color: var(--muted);">{{ stats.vazios }}</p>
+                <p class="summary-lbl">Sem atividade</p>
+            </div>
+        </aside>
+
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+# ambiente virtual
+venv/
+env/
+
+# segredo da API
+.env
+
+# cache python
+__pycache__/
+*.pyc
+
+# banco local (se estiver usando sqlite)
+db.sqlite3
+*.sqlite3
+
+# logs
+*.log
+
+# django static (se você gerar)
+staticfiles/
+
+# IDE
+.vscode/
+.idea/
+
+# sistema operacional
+.DS_Store
+Thumbs.db

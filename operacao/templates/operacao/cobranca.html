@@ -1,0 +1,182 @@
+{% extends 'operacao/base.html' %}
+
+{% block title %}Extrait Club - Painel de Cobrança{% endblock %}
+{% block container_class %}container-largo{% endblock %}
+{% block header_class %}header-cobranca{% endblock %}
+{% block page_title %}Painel de Cobrança{% endblock %}
+{% block page_subtitle %}Pedidos pendentes e cobranças{% endblock %}
+{% block nav_button %}
+{% endblock %}
+
+{% block content %}
+<div class="section-rule">
+    <span>Cobranças Pendentes &ensp;—&ensp; Lista Dinâmica</span>
+    <div class="line"></div>
+</div>
+
+<div class="card-grid">
+    {% if cobrancas %}
+    {% for nome, dados in cobrancas.items %}
+    <article class="order-card" id="card-{{ dados.cliente_id }}" style="position: relative;">
+        <p class="ficha-label">Ficha de Pedido&ensp;·&ensp;EC-00{{ dados.cliente_id }}</p>
+        <h2 class="customer-name">{{ nome }}</h2>
+
+        <hr class="divider">
+
+        <div class="table-grid table-header">
+            <span>Decant</span>
+            <span class="center">ML</span>
+            <span class="center">R$/ML</span>
+            <span>Total</span>
+        </div>
+
+        <div>
+            {% for item in dados.itens %}
+            <div class="table-grid table-row">
+                <div>
+                    <div class="perfume-name">{{ item.perfume }}</div>
+                    <div class="perfume-brand">Extrait {{ item.tipo }}</div>
+                </div>
+                <span class="center number">{{ item.ml }}</span>
+                <span class="center number">{{ item.preco_ml|floatformat:"2g" }}</span>
+                <span class="total-item">R$ {{ item.valor|floatformat:"2g" }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="totals-area">
+            <hr class="divider">
+
+            <div class="grand-total-box">
+                <p class="grand-total-label">Total Geral</p>
+                <p class="grand-total-value">R$ {{ dados.total_geral|floatformat:"2g" }}</p>
+            </div>
+
+                <div class="btn-group">
+                <button class="btn btn-primary btn-copiar-action" data-nome="{{ nome }}"
+                    data-total="{{ dados.total_geral }}" data-itens='{{ dados.itens|escapejs }}'>
+                    Copiar texto
+                </button>
+                <button class="btn btn-terciario btn-imagem-action" data-id="{{ dados.cliente_id }}"
+                    data-nome="{{ nome }}">
+                    Gerar imagem
+                </button>
+                <form method="POST" action="{% url 'operacao:dar_baixa_pagamento' dados.cliente_id %}" style="display:flex; flex: 1;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center;"
+                        onclick="return confirm('Confirmar pagamento de {{ nome }}?')">
+                        Finalizar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">
+        Nenhum pedido pendente no momento.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script>
+    // 1. LÓGICA DE COPIAR TEXTO DO WHATSAPP
+    const formatarMoeda = (valor) => {
+        return parseFloat(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    document.querySelectorAll('.btn-copiar-action').forEach(botao => {
+        botao.addEventListener('click', function () {
+            const nome = this.getAttribute('data-nome');
+            const totalBruto = this.getAttribute('data-total');
+            // data-itens agora usa escapejs — seguro com apóstrofos e aspas
+            const itens = JSON.parse(this.getAttribute('data-itens'));
+
+            let texto = `Fala *${nome}*, beleza? 🫡\n\nAqui está o seu fechamento dos decants dessa semana:\n\n`;
+            itens.forEach(item => {
+                texto += `• *${item.perfume}* (${item.ml}ml) -> R$ ${formatarMoeda(item.valor)}\n`;
+            });
+            texto += `\n*Total Geral: R$ ${formatarMoeda(totalBruto)}*\n`;
+            texto += `\nChave Pix (E-mail): *suachavepix@email.com*\n\nObrigado tmj 🤝`;
+
+            // API moderna — substitui o depreciado execCommand('copy')
+            navigator.clipboard.writeText(texto).then(() => {
+                const textoOriginal = this.innerText;
+                this.innerText = "Copiado ✓";
+                this.style.background = "#2a2a2a";
+                setTimeout(() => {
+                    this.innerText = textoOriginal;
+                    this.style.background = "var(--ink)";
+                }, 2200);
+            }).catch(err => {
+                console.error('Erro ao copiar texto:', err);
+            });
+        });
+    });
+
+    // 2. ⚡ NOVA LÓGICA: COPIAR IMAGEM DIRETO PARA A ÁREA DE TRANSFERÊNCIA (CTRL+C)
+    document.querySelectorAll('.btn-imagem-action').forEach(botao => {
+        botao.addEventListener('click', function () {
+            const clienteId = this.getAttribute('data-id');
+            const cardAlvo = document.getElementById(`card-${clienteId}`);
+            const btnGroup = cardAlvo.querySelector('.btn-group');
+
+            const textoOriginal = this.innerText;
+            this.innerText = "Copiando imagem...";
+            this.disabled = true;
+
+            // Esconde os botões temporariamente para o print ficar limpo
+            btnGroup.style.opacity = '0';
+
+            // Renderiza o card HTML como um Canvas
+            html2canvas(cardAlvo, {
+                backgroundColor: "#FFFFFF",
+                scale: 2, // Resolução alta para não borrar no WhatsApp
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
+                // Restaura os botões na tela do sistema imediatamente
+                btnGroup.style.opacity = '1';
+
+                // Converte o canvas para um Blob (formato de arquivo binário em memória)
+                canvas.toBlob(blob => {
+                    if (!blob) {
+                        throw new Error("Falha ao gerar o blob da imagem.");
+                    }
+
+                    // Alimenta a área de transferência do sistema operacional com a imagem
+                    navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]).then(() => {
+                        // Feedback visual de sucesso
+                        this.innerText = "Copiada! (Ctrl+V) ✓";
+                        this.disabled = false;
+                        this.style.background = "#2a2a2a";
+                        this.style.color = "#FFFFFF";
+
+                        setTimeout(() => {
+                            this.innerText = textoOriginal;
+                            this.style.background = "var(--bg)";
+                            this.style.color = "var(--secondary)";
+                        }, 2500);
+                    }).catch(err => {
+                        console.error("Erro ao copiar para o clipboard: ", err);
+                        this.innerText = "Erro ao copiar";
+                        this.disabled = false;
+                    });
+                }, 'image/png');
+
+            }).catch(err => {
+                btnGroup.style.opacity = '1';
+                this.innerText = "Erro ao gerar";
+                this.disabled = false;
+                console.error(err);
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Extrait Club System{% endblock %}</title>
+
+    <!-- Google Fonts Premium -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'operacao/style.css' %}?v=8">
+</head>
+
+<body>
+
+    <!-- BARRA DE NAVEGAÇÃO PREMIUM -->
+    <nav class="system-nav">
+        <div class="nav-container">
+            <div class="nav-logo-box">
+                <span class="nav-logo-text">EC</span>
+            </div>
+            <div class="nav-links">
+                <a href="{% url 'operacao:importar_leilao' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'importar_leilao' or request.resolver_match.url_name == 'confirmar_importacao' %}active{% endif %}">Importar</a>
+                <a href="{% url 'operacao:lista_perfumes' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'lista_perfumes' or request.resolver_match.url_name == 'estoque_baixo' %}active{% endif %}">Perfumes</a>
+                <a href="{% url 'operacao:painel_cobranca' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'painel_cobranca' %}active{% endif %}">Cobranças</a>
+                <a href="{% url 'operacao:lista_clientes' %}" class="nav-item {% if request.resolver_match.url_name == 'lista_clientes' or request.resolver_match.url_name == 'detalhe_cliente' %}active{% endif %}">Clientes</a>
+            </div>
+            <div style="width: 32px;"></div> <!-- Spacer para centralizar os links -->
+        </div>
+    </nav>
+
+    <!-- CONTAINER PRINCIPAL -->
+    <div class="container {% block container_class %}{% endblock %}">
+
+        <!-- HEADER DA PÁGINA -->
+        <header class="page-header {% block header_class %}{% endblock %}">
+            <div class="header-star">
+                <span>✦</span> Extrait Club <span>✦</span>
+            </div>
+            <h1 class="main-title">{% block page_title %}Título da Página{% endblock %}</h1>
+            <p class="subtitle">{% block page_subtitle %}Subtítulo da página{% endblock %}</p>
+            <div class="gold-rule-header"></div>
+            {% block nav_button %}{% endblock %}
+        </header>
+
+        {% if messages %}
+        <div class="messages-container" style="max-width: 800px; margin: 0 auto 24px auto; text-align: center;">
+            {% for message in messages %}
+            <div class="message {{ message.tags }}" style="padding: 16px; border-radius: 8px; margin-bottom: 8px; background-color: {% if message.tags == 'success' %}#e6f4ea{% elif message.tags == 'error' %}#fce8e6{% else %}#f1f3f4{% endif %}; color: {% if message.tags == 'success' %}#137333{% elif message.tags == 'error' %}#c5221f{% else %}#3c4043{% endif %}; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <main>
+            {% block content %}
+            {% endblock %}
+        </main>
+
+        <footer style="text-align: center; border-top: 1px solid rgba(0,0,0,0.07); padding: 32px 0; margin-top: 40px;">
+            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.3em; color: #d6d3d1;">Extrait
+                Club · Uso Interno</span>
+        </footer>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

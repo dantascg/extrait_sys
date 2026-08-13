@@ -1,0 +1,178 @@
+{% extends 'operacao/base.html' %}
+{% load static %}
+
+{% block title %}Extrait Club — {{ cliente.nome }}{% endblock %}
+{% block page_title %}{{ cliente.nome }}{% endblock %}
+{% block page_subtitle %}EC-{{ cliente.id|stringformat:"03d" }} · Histórico e pedidos{% endblock %}
+
+{% block content %}
+
+{# ── MÉTRICAS ─────────────────────────────────────────────────────────── #}
+<div class="grid-3col" style="margin-bottom: 40px;">
+    <div class="stat-card">
+        <p class="stat-value">{{ total_pedidos }}</p>
+        <p class="stat-label">Pedidos no total</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-value" style="color: var(--gold);">
+            R$ {{ total_gasto|floatformat:"2" }}
+        </p>
+        <p class="stat-label">Total já pago</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-value" style="color: #ea580c;">
+            {% if saldo_pendente > 0 %}
+                R$ {{ saldo_pendente|floatformat:"2" }}
+            {% else %}
+                —
+            {% endif %}
+        </p>
+        <p class="stat-label">Saldo pendente</p>
+    </div>
+</div>
+
+{# ── AÇÕES DO CLIENTE ─────────────────────────────────────────────────── #}
+<div class="divider-row">
+    <span>Ações</span>
+    <div class="line"></div>
+</div>
+
+<div class="cliente-acoes" style="margin-bottom: 40px;">
+
+    {# Editar nome #}
+    <div class="card" style="padding: 24px;">
+        <p class="ficha-label">Alterar nome</p>
+        <form method="POST" action="{% url 'operacao:editar_cliente' cliente.id %}" class="editar-nome-form">
+            {% csrf_token %}
+            <input type="text" name="nome" value="{{ cliente.nome }}"
+                class="input-nome" placeholder="Nome do cliente">
+            <button type="submit" class="btn-action btn-primario">Salvar</button>
+        </form>
+    </div>
+
+</div>
+
+{# ── FILTRO POR FRASCO ────────────────────────────────────────────────── #}
+<div class="divider-row">
+    <span>Histórico de pedidos</span>
+    <div class="line"></div>
+    {% if frasco_filtro %}
+    <a href="{% url 'operacao:detalhe_cliente' cliente.id %}" class="divider-row-clear">Limpar filtro ✕</a>
+    {% endif %}
+</div>
+
+<div class="filtro-frascos" style="margin-bottom: 28px;">
+    <a href="{% url 'operacao:detalhe_cliente' cliente.id %}"
+        class="filtro-chip {% if not frasco_filtro %}active{% endif %}">
+        Todos
+    </a>
+    {% for f in frascos_do_cliente %}
+    <a href="{% url 'operacao:detalhe_cliente' cliente.id %}?frasco={{ f.id }}"
+        class="filtro-chip {% if frasco_filtro == f.id|stringformat:'s' %}active{% endif %}">
+        {{ f.nome_perfume }}
+    </a>
+    {% endfor %}
+</div>
+
+{# ── HISTÓRICO DE PEDIDOS (TABELA PLANA) ───────────────────────────────── #}
+{% if frascos_agrupados %}
+<div class="card" style="overflow-x: auto; margin-bottom: 40px;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+        <thead>
+            <tr style="border-bottom: 1px solid #e5e5e5; color: #78716c;">
+                <th style="padding: 16px; font-weight: 500;">Perfume</th>
+                <th style="padding: 16px; font-weight: 500;">ML</th>
+                <th style="padding: 16px; font-weight: 500;">Tipo</th>
+                <th style="padding: 16px; font-weight: 500;">Data</th>
+                <th style="padding: 16px; font-weight: 500; text-align: right;">Valor</th>
+                <th style="padding: 16px; font-weight: 500; text-align: center;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grupo in frascos_agrupados %}
+                {% for pedido in grupo.pedidos %}
+                <tr style="border-bottom: 1px solid #f0f0f0; {% if pedido.pago %}background-color: #fbfbfb;{% endif %}">
+                    <td style="padding: 16px;">
+                        <div style="font-weight: 500; color: #1a1a1a;">{{ grupo.frasco.nome_perfume }}</div>
+                        <div style="font-size: 12px; color: #a8a29e;">{{ grupo.frasco.marca }}</div>
+                    </td>
+                    <td style="padding: 16px; font-weight: 600;">{{ pedido.quantidade_ml }}ml</td>
+                    <td style="padding: 16px;">
+                        <span class="lance-tipo {% if pedido.tipo_pedido == 'APC' %}apc{% endif %}">{{ pedido.tipo_pedido }}</span>
+                        {% if pedido.transferencia_origem %}
+                            <br><span class="badge-transferencia" style="margin-left: 0; margin-top: 4px; display: inline-block;">Transferência</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 16px; color: #57534e;">{{ pedido.data_pedido|date:"d/m/Y" }}</td>
+                    <td style="padding: 16px; text-align: right; font-weight: 500;">R$ {{ pedido.valor_total|floatformat:"2" }}</td>
+                    <td style="padding: 16px; text-align: center;">
+                        {% if pedido.pago %}
+                            <span class="badge-ui badge-imported">Pago</span>
+                        {% else %}
+                            <form method="POST" action="{% url 'operacao:baixa_pedido_individual' pedido.id %}" onsubmit="return confirm('Marcar este pedido como pago?')">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-baixa">Dar baixa</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state-clients">
+    <p class="empty-title">Nenhum pedido encontrado</p>
+    <p class="empty-subtitle">Tente outro filtro ou importe uma mensagem com este cliente.</p>
+</div>
+{% endif %}
+
+{# ── HISTÓRICO DE TRANSFERÊNCIAS ──────────────────────────────────────── #}
+{% if transferencias_cedidas or transferencias_recebidas %}
+<div class="divider-row">
+    <span>Histórico de Transferências</span>
+    <div class="line"></div>
+</div>
+
+<div class="card" style="padding: 24px; margin-bottom: 40px;">
+    {% if transferencias_cedidas %}
+    <h3 style="font-family: 'Cormorant Garamond', serif; font-size: 20px; margin-bottom: 16px;">ML Cedidos</h3>
+    <ul style="list-style: none; padding: 0; margin-bottom: 24px;">
+        {% for t in transferencias_cedidas %}
+        <li style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; font-size: 14px;">
+            <div>
+                <strong>Cedeu {{ t.quantidade_ml }}ml</strong> de <em>{{ t.frasco.nome_perfume }}</em> para <strong>{{ t.pedido_destinatario.cliente.nome }}</strong>
+                {% if t.observacao %}<div style="color: #78716c; font-size: 12px; margin-top: 4px;">Obs: {{ t.observacao }}</div>{% endif %}
+            </div>
+            <span style="color: #a8a29e; font-size: 12px;">{{ t.data|date:"d M Y" }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if transferencias_recebidas %}
+    <h3 style="font-family: 'Cormorant Garamond', serif; font-size: 20px; margin-bottom: 16px;">ML Recebidos</h3>
+    <ul style="list-style: none; padding: 0; margin-bottom: 8px;">
+        {% for t in transferencias_recebidas %}
+        <li style="padding: 12px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; font-size: 14px;">
+            <div>
+                <strong>Recebeu {{ t.quantidade_ml }}ml</strong> de <em>{{ t.frasco.nome_perfume }}</em> transferidos de <strong>{{ t.pedido_cedente.cliente.nome }}</strong>
+                {% if t.observacao %}<div style="color: #78716c; font-size: 12px; margin-top: 4px;">Obs: {{ t.observacao }}</div>{% endif %}
+            </div>
+            <span style="color: #a8a29e; font-size: 12px;">{{ t.data|date:"d M Y" }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── VOLTAR ───────────────────────────────────────────────────────────── #}
+<div style="margin-top: 48px;">
+    <a href="{% url 'operacao:lista_clientes' %}" class="btn-action btn-secundario" style="display: inline-block; padding: 12px 24px;">
+        ← Voltar para clientes
+    </a>
+</div>
+
+{% endblock %}
